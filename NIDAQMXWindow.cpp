@@ -6,11 +6,9 @@
 #include <iostream>
 #include <sstream>
 #include <iomanip>
+#include "NIDAQmx.h"
 
 using namespace std;
-
-#include "C:\\Program Files (x86)\\National Instruments\\Shared\\ExternalCompilerSupport\\C\\include\\NIDAQmx.h"
-#pragma comment( lib, "C:\\Program Files (x86)\\National Instruments\\Shared\\ExternalCompilerSupport\\C\\lib32\\msvc\\NIDAQmx.lib" ) 	// notice this is 32 bit only
 
 TaskHandle taskHandle = 0;
 const int arraySizeInSamps = 4;
