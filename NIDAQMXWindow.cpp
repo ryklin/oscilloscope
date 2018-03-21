@@ -1,6 +1,3 @@
-// NIDAQMXWindow.cpp : Defines the entry point for the application.
-//
-
 #include "stdafx.h"
 #include "NIDAQMXWindow.h"
 #include <iostream>
@@ -14,8 +11,8 @@ TaskHandle taskHandle = 0;
 const int arraySizeInSamps = 4;
 float64     readArray[arraySizeInSamps]; //memset(readArray, 0, arraySizeInSamps * sizeof(float64));
 
-float widthWindow = 1800;
-float heightWindow = 1200;
+float widthWindow = 800;
+float heightWindow = 400;
 HDC hdcBackGround = NULL;
 HBITMAP screenMain = NULL; 
 
@@ -350,6 +347,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			FillRect(hdcBack, &rect, backgroundBrush);
 			DeleteObject(backgroundBrush);
 
+
+			// render data from analog input channel 0
 			int xP = pixIndex;
 
 			float y = (pixX[xP] + 10) / 20 * heightWindow;
@@ -363,6 +362,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			}
 
 
+			// render data from analog input channel 1
 			xP = pixIndex;
 
 			y = (pixY[xP] + 10) / 20 * heightWindow;
@@ -376,7 +376,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				MoveToEx(hdcBack, x / (float)BUFFER_SIZE*widthWindow, y, NULL);
 			}
 
-		
+			// render everything to screen
 			BitBlt(hdc, 0, 0, widthWindow, heightWindow, hdcBack, 0, 0, SRCCOPY);
 
 			ReleaseDC(hWnd, hdc);
