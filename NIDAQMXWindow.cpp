@@ -152,13 +152,13 @@ void daqRead() {
 	//}
 	else {
 		message << std::fixed << std::setprecision(2);
-		pixIndex = (pixIndex + 1) % BUFFER_SIZE;
 		message << pixIndex << " ";
 
 		for (int channel = 0; channel < arraySizeInSamps; channel++) {
 			message << readArray[channel] << ", ";
 			pix[channel][pixIndex] = readArray[channel];
 		}
+		pixIndex = (pixIndex + 1) % BUFFER_SIZE;
 	}
 	message << endl;
 	OutputDebugStringA(message.str().c_str());
@@ -322,6 +322,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		color[6] = CreatePen(PS_SOLID, 1, RGB(255, 255, 255));
 		color[7] = CreatePen(PS_SOLID, 1, RGB(0, 0, 0));
 
+		memset(pix, 0, sizeof(float)*NUM_CHANNELS*BUFFER_SIZE);  // optional, I do it as a precaution.
+
 		InitDAQ();
 
 		SetTimer(hWnd, WM_TIMER, 0, (TIMERPROC)NULL);
@@ -398,15 +400,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				y = (pix[channel][xP] + 10) / 20 * heightWindow;
 				MoveToEx(hdcBack, 0, y, NULL);
 				SelectObject(hdcBack, color[channel]);
-				for (int x = 0; x < BUFFER_SIZE; x++) {
+				for (int x = 1; x < BUFFER_SIZE; x++) {
 					xP = (xP + 1) % BUFFER_SIZE;								// increment to next data value INDEX (wrap if necessary)
 					y = (pix[channel][xP] + 10) / 20 * heightWindow;			// get data value based on INDEX and scale into window's space. First scale from -10/10V to 0-1 (normalized)
-					LineTo(hdcBack, x / (float)BUFFER_SIZE*widthWindow, y);
-					MoveToEx(hdcBack, x / (float)BUFFER_SIZE*widthWindow, y, NULL);
+					LineTo(hdcBack, (float) x / (float)BUFFER_SIZE*widthWindow, y);
+					MoveToEx(hdcBack, (float)x / (float)BUFFER_SIZE*widthWindow, y, NULL);
 				}
 			}
-
-
 
 			// render everything to screen
 			BitBlt(hdc, 0, 0, widthWindow, heightWindow, hdcBack, 0, 0, SRCCOPY);
