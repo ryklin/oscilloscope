@@ -1,3 +1,17 @@
+///////////////////////////////////////////////////////////////////////////////////////////////////
+//
+// Copyright (C) 2018  Ryklin Software Inc
+//
+// Contact Information:
+//
+// Email:
+// info@ryklinsoftware.com
+//
+// Website:
+// www.ryklinsoftware.com
+//
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
 #include "stdafx.h"
 #include "NIDAQMXWindow.h"
 #include <iostream>
@@ -9,7 +23,7 @@ using namespace std;
 
 TaskHandle taskHandle = 0;
 const int arraySizeInSamps = 4;
-float64     readArray[arraySizeInSamps]; //memset(readArray, 0, arraySizeInSamps * sizeof(float64));
+float64 readArray[arraySizeInSamps]; 
 
 float widthWindow = 800;
 float heightWindow = 400;
@@ -77,7 +91,7 @@ void InitDAQ() {
 	This misrepresentation of a signal is called aliasing.
 	*/
 
-	float64 sampleRate = 1000; //The sampling rate in samples per second per channel. If you use an external source for the Sample Clock, set this value to the maximum expected rate of that clock.
+	float64 sampleRate = 500; //The sampling rate in samples per second per channel. If you use an external source for the Sample Clock, set this value to the maximum expected rate of that clock.
 
 	/*
 	The number of samples to acquire or generate for each channel in the task if sampleMode is DAQmx_Val_FiniteSamps.
@@ -154,6 +168,8 @@ void StopDAQ() {
 	DAQmxStopTask(taskHandle);
 	DAQmxClearTask(taskHandle);
 }
+
+// the rest is mostly boiler plate code except where I call the above functions and graph the data in the WM_TIMER message section of the WndProc
 
 #define MAX_LOADSTRING 100
 
