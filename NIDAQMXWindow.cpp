@@ -21,19 +21,22 @@
 
 using namespace std;
 
+#define NUM_CHANNELS 8 // some cards have 16 channels, and depends also if wired differential or single ended
+
 TaskHandle taskHandle = 0;
-const int arraySizeInSamps = 4;
+
+const int arraySizeInSamps = NUM_CHANNELS;
 float64 readArray[arraySizeInSamps]; 
 
 float widthWindow = 800;
 float heightWindow = 400;
 HDC hdcBackGround = NULL;
 HBITMAP screenMain = NULL; 
+HPEN color[NUM_CHANNELS];
 
-#define BUFFER_SIZE 1600
+#define BUFFER_SIZE 1600  // arbitrary number of bytes that I want to buffer in my computer's RAM
 
-float pixX[BUFFER_SIZE];
-float pixY[BUFFER_SIZE];
+float pix[NUM_CHANNELS][BUFFER_SIZE];
 int pixIndex = 0;
 
 void InitDAQ() {
@@ -48,7 +51,7 @@ void InitDAQ() {
 
 	if (status != 0) {
 		DAQmxGetErrorString(status, errorString, MAX_PATH);
-		OutputDebugStringA(errorString);
+		MessageBoxA(0, errorString, "Oscilloscope-NIDAQmx", MB_ICONERROR);
 		return;
 	}
 
@@ -62,11 +65,11 @@ void InitDAQ() {
 	int32 terminalConfig = DAQmx_Val_RSE;
 
 	int32 units = DAQmx_Val_Volts;
-	char nameToAssignToChannel[] = "Dev1/ai0:3";
+	char nameToAssignToChannel[] = "Dev1/ai0:7";  // here is where I specify that I want to sample from channels 1 through 7 (zero based indexing)
 	status = DAQmxCreateAIVoltageChan(taskHandle, nameToAssignToChannel, "", terminalConfig, -10.0, 10.0, units, NULL);
 	if (status != 0) {
 		DAQmxGetErrorString(status, errorString, MAX_PATH);
-		OutputDebugStringA(errorString);
+		MessageBoxA(0, errorString, "Oscilloscope-NIDAQmx", MB_ICONERROR);
 		return;
 	}
 	/* activeEdge Options:
@@ -105,7 +108,7 @@ void InitDAQ() {
 	status = DAQmxCfgSampClkTiming(taskHandle, "", sampleRate, activeEdge, sampleMode, sampsPerChanToAcquire);
 	if (status != 0) {
 		DAQmxGetErrorString(status, errorString, MAX_PATH);
-		OutputDebugStringA(errorString);
+		MessageBoxA(0, errorString, "Oscilloscope-NIDAQmx", MB_ICONERROR);
 		return;
 	}
 
@@ -115,7 +118,7 @@ void InitDAQ() {
 	status = DAQmxStartTask(taskHandle);
 	if (status != 0) {
 		DAQmxGetErrorString(status, errorString, MAX_PATH);
-		OutputDebugStringA(errorString);
+		MessageBoxA(0, errorString, "Oscilloscope-NIDAQmx", MB_ICONERROR);
 		return;
 	}
 
@@ -137,7 +140,7 @@ void daqRead() {
 	if (status != 0) {
 		char errorString[MAX_PATH];
 		DAQmxGetErrorString(status, errorString, MAX_PATH);
-		message << errorString;
+		message << "DAQmxReadAnalogF64() status:" << status << " " << errorString;
 	}
 	//if (DAQmxErrorSamplesNotYetAvailable == status || DAQmxErrorSamplesNoLongerAvailable == status) {
 	//	message << "status:" << status << " continue" << std::endl;
@@ -152,21 +155,32 @@ void daqRead() {
 		pixIndex = (pixIndex + 1) % BUFFER_SIZE;
 		message << pixIndex << " ";
 
-		for (int i = 0; i < arraySizeInSamps; i++) {
-			message << readArray[i] << ", ";
+		for (int channel = 0; channel < arraySizeInSamps; channel++) {
+			message << readArray[channel] << ", ";
+			pix[channel][pixIndex] = readArray[channel];
 		}
-
-		pixX[pixIndex] = readArray[0];
-		pixY[pixIndex] = readArray[1];
-
 	}
 	message << endl;
 	OutputDebugStringA(message.str().c_str());
 }
 
 void StopDAQ() {
-	DAQmxStopTask(taskHandle);
-	DAQmxClearTask(taskHandle);
+	int32 status;
+	char errorString[MAX_PATH];
+
+	status = DAQmxStopTask(taskHandle);
+	if (status != 0) {
+		DAQmxGetErrorString(status, errorString, MAX_PATH);
+		MessageBoxA(0, errorString, "Oscilloscope-NIDAQmx", MB_ICONERROR);
+		return;
+	}
+
+	status = DAQmxClearTask(taskHandle);
+	if (status != 0) {
+		DAQmxGetErrorString(status, errorString, MAX_PATH);
+		MessageBoxA(0, errorString, "Oscilloscope-NIDAQmx", MB_ICONERROR);
+		return;
+	}
 }
 
 // the rest is mostly boiler plate code except where I call the above functions and graph the data in the WM_TIMER message section of the WndProc
@@ -290,7 +304,6 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 //
 //
 
-
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	static HDC hdcBack;
@@ -298,9 +311,21 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     switch (message)
     {
 	case WM_CREATE:
-		SetTimer(hWnd, WM_TIMER, 0, (TIMERPROC)NULL);
+	{
+		// set these colors manually because I can't think of a better way
+		color[0] = CreatePen(PS_SOLID, 1, RGB(255, 0, 0));
+		color[1] = CreatePen(PS_SOLID, 1, RGB(0, 255, 255));
+		color[2] = CreatePen(PS_SOLID, 1, RGB(0, 255, 0));
+		color[3] = CreatePen(PS_SOLID, 1, RGB(0, 0, 255));
+		color[4] = CreatePen(PS_SOLID, 1, RGB(255, 255, 0));
+		color[5] = CreatePen(PS_SOLID, 1, RGB(255, 0, 255));
+		color[6] = CreatePen(PS_SOLID, 1, RGB(255, 255, 255));
+		color[7] = CreatePen(PS_SOLID, 1, RGB(0, 0, 0));
+
 		InitDAQ();
 
+		SetTimer(hWnd, WM_TIMER, 0, (TIMERPROC)NULL);
+	}
 		break;
 	case WM_SIZE:
 		widthWindow = LOWORD(lParam);
@@ -363,34 +388,25 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			FillRect(hdcBack, &rect, backgroundBrush);
 			DeleteObject(backgroundBrush);
 
+			// render data from all analog input channels
 
-			// render data from analog input channel 0
-			int xP = pixIndex;
+			int xP;
+			float y;
+			for (int channel = 0; channel < NUM_CHANNELS; channel++) {
 
-			float y = (pixX[xP] + 10) / 20 * heightWindow;
-			MoveToEx(hdcBack, 0, y, NULL);
-			SelectObject(hdcBack, GetStockObject(WHITE_PEN));
-			for (int x = 0; x < BUFFER_SIZE; x++) {
-				xP = (xP + 1) % BUFFER_SIZE;
-				y = (pixX[xP] + 10) / 20 * heightWindow;
-				LineTo(hdcBack, x/(float) BUFFER_SIZE*widthWindow, y);
-				MoveToEx(hdcBack, x / (float)BUFFER_SIZE*widthWindow, y, NULL);
+				xP = pixIndex;
+				y = (pix[channel][xP] + 10) / 20 * heightWindow;
+				MoveToEx(hdcBack, 0, y, NULL);
+				SelectObject(hdcBack, color[channel]);
+				for (int x = 0; x < BUFFER_SIZE; x++) {
+					xP = (xP + 1) % BUFFER_SIZE;								// increment to next data value INDEX (wrap if necessary)
+					y = (pix[channel][xP] + 10) / 20 * heightWindow;			// get data value based on INDEX and scale into window's space. First scale from -10/10V to 0-1 (normalized)
+					LineTo(hdcBack, x / (float)BUFFER_SIZE*widthWindow, y);
+					MoveToEx(hdcBack, x / (float)BUFFER_SIZE*widthWindow, y, NULL);
+				}
 			}
 
 
-			// render data from analog input channel 1
-			xP = pixIndex;
-
-			y = (pixY[xP] + 10) / 20 * heightWindow;
-			MoveToEx(hdcBack, 0, y, NULL);
-
-			SelectObject(hdcBack, GetStockObject(BLACK_PEN));
-			for (int x = 0; x < BUFFER_SIZE; x++) {
-				xP = (xP + 1) % BUFFER_SIZE;
-				y = (pixY[xP] + 10) / 20 * heightWindow;
-				LineTo(hdcBack, x / (float)BUFFER_SIZE*widthWindow, y);
-				MoveToEx(hdcBack, x / (float)BUFFER_SIZE*widthWindow, y, NULL);
-			}
 
 			// render everything to screen
 			BitBlt(hdc, 0, 0, widthWindow, heightWindow, hdcBack, 0, 0, SRCCOPY);
@@ -423,7 +439,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		if (screenMain) {
 			DeleteObject(screenMain); screenMain = NULL;
 		}
-		
+		for (int channel = 0; channel < NUM_CHANNELS; channel++) {
+			DeleteObject(color[channel]);
+		}
 		PostQuitMessage(0);
         break;
     default:
