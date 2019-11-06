@@ -1,6 +1,6 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 //
-// Copyright (C) 2018  Ryklin Software Inc
+// Copyright (C) 2019  Ryklin Software Inc
 //
 // Contact Information:
 //
@@ -382,6 +382,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		return TRUE;
 	case WM_TIMER:
 		daqRead();
+
 		{
 			HDC hdc = GetDC(hWnd);
 
@@ -390,11 +391,25 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			FillRect(hdcBack, &rect, backgroundBrush);
 			DeleteObject(backgroundBrush);
 
-			// render data from all analog input channels
+			float y = 0;
+			int xP = 0;
 
-			int xP;
-			float y;
-			for (int channel = 0; channel < NUM_CHANNELS; channel++) {
+			// plots the y minor axis
+			SelectObject(hdcBack, color[0]);
+			for (float yAxis = 0; yAxis < 20; yAxis++) {
+				y = yAxis / 20 * heightWindow;
+				MoveToEx(hdcBack, xP, y, NULL);
+				LineTo(hdcBack, xP+10, y);
+
+				stringstream buffer;
+				buffer << (yAxis-10);
+				TextOutA(hdcBack, xP + 11, y-8, buffer.str().c_str(), buffer.str().length());
+			}
+
+			// render data from all analog input channels
+						
+//			for (int channel = 0; channel < NUM_CHANNELS; channel++) {
+			for (int channel = 0; channel < 2; channel++) {
 
 				xP = pixIndex;
 				y = (pix[channel][xP] + 10) / 20 * heightWindow;
