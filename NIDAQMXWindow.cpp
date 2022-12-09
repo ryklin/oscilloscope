@@ -1,14 +1,14 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 //
-// Copyright (C) 2019  Ryklin Software Inc
+// Copyright (C) 2022  Neuro Software Developers, Inc.
 //
 // Contact Information:
 //
 // Email:
-// info@ryklinsoftware.com
+// info@neurosoftware.com
 //
 // Website:
-// www.ryklinsoftware.com
+// www.neurosoftware.com
 //
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -28,18 +28,31 @@ TaskHandle taskHandle = 0;
 const int arraySizeInSamps = NUM_CHANNELS;
 float64 readArray[arraySizeInSamps]; 
 
-float widthWindow = 800;
-float heightWindow = 400;
+#define BUFFER_SIZE 1024  // arbitrary number of bytes that I want to buffer in my computer's RAM
+
+float widthWindow = BUFFER_SIZE;
+float heightWindow = 768;
 HDC hdcBackGround = NULL;
 HBITMAP screenMain = NULL; 
 HPEN color[NUM_CHANNELS];
+HPEN colorGray;
+HPEN colorGrayDashed;
+HPEN colorGrayDot;
 
-#define BUFFER_SIZE 1600  // arbitrary number of bytes that I want to buffer in my computer's RAM
+string daqMessage[10];
+int daqMessageIndex = 0;
 
 float pix[NUM_CHANNELS][BUFFER_SIZE];
-int pixIndex = 0;
+int sampleNum = 0;
+
+int pauseScreen = -1;
+int showSampleValues = -1;
+int hideGrid = -1;
 
 void InitDAQ() {
+
+	char deviceNamesStr[255];
+	DAQmxGetSystemInfoAttribute(DAQmx_Sys_DevNames, deviceNamesStr, 255); // this will query the nidaq driver to see what cards are detected
 
 	int32 status = 0;
 	char errorString[MAX_PATH];
@@ -65,7 +78,11 @@ void InitDAQ() {
 	int32 terminalConfig = DAQmx_Val_RSE;
 
 	int32 units = DAQmx_Val_Volts;
-	char nameToAssignToChannel[] = "Dev1/ai0:7";  // here is where I specify that I want to sample from channels 1 through 7 (zero based indexing)
+	char channelStr[] = "/ai0:7";
+//	char nameToAssignToChannel[255] = "Dev1";
+	char nameToAssignToChannel[255] = "Dev2";
+	strcat_s(nameToAssignToChannel, channelStr);
+
 	status = DAQmxCreateAIVoltageChan(taskHandle, nameToAssignToChannel, "", terminalConfig, -10.0, 10.0, units, NULL);
 	if (status != 0) {
 		DAQmxGetErrorString(status, errorString, MAX_PATH);
@@ -83,7 +100,8 @@ void InitDAQ() {
 	DAQmx_Val_ContSamps // Acquire or generate samples until you stop the task.
 	DAQmx_Val_HWTimedSinglePoint //Acquire or generate samples continuously using hardware timing without a buffer. Hardware timed single point sample mode is supported only for the sample clock and change detection timing types. (http://zone.ni.com/reference/en-XX/help/370466AC-01/mxcncpts/hwtspsamplemode/)
 	*/
-	int32 sampleMode = DAQmx_Val_HWTimedSinglePoint;
+//	int32 sampleMode = DAQmx_Val_HWTimedSinglePoint;
+	int32 sampleMode = DAQmx_Val_ContSamps;
 
 	/*
 	One of the most important parameters of an analog input or output system is the rate at which the measurement device samples an incoming signal or generates the output signal.
@@ -94,7 +112,7 @@ void InitDAQ() {
 	This misrepresentation of a signal is called aliasing.
 	*/
 
-	float64 sampleRate = 500; //The sampling rate in samples per second per channel. If you use an external source for the Sample Clock, set this value to the maximum expected rate of that clock.
+	float64 sampleRate = 50; //The sampling rate in samples per second per channel. If you use an external source for the Sample Clock, set this value to the maximum expected rate of that clock.
 
 	/*
 	The number of samples to acquire or generate for each channel in the task if sampleMode is DAQmx_Val_FiniteSamps.
@@ -124,7 +142,16 @@ void InitDAQ() {
 
 }
 
-void daqRead() {
+void clearData() {
+	for (int channel = 0; channel < NUM_CHANNELS; channel++) {
+		for (int x = 0; x < BUFFER_SIZE; x++) {
+			pix[channel][x] = readArray[channel] * -1;
+		}
+	}
+}
+
+string daqRead() {
+	static int firstSample = 0;
 	/*********************************************/
 	// DAQmx Read Code
 	/*********************************************/
@@ -132,9 +159,7 @@ void daqRead() {
 
 	int32 sampsPerChanRead = -1;
 	float64 timeOut = 0;
-
 	stringstream message;
-
 	int32 status = DAQmxReadAnalogF64(taskHandle, numSampsPerChan, timeOut, DAQmx_Val_GroupByChannel, readArray, arraySizeInSamps, &sampsPerChanRead, NULL);
 
 	if (status != 0) {
@@ -151,17 +176,27 @@ void daqRead() {
 	//	message << "status:" << status << "breaking" << std::endl;
 	//}
 	else {
-		message << std::fixed << std::setprecision(2);
-		message << pixIndex << " ";
+		if (firstSample == 0)  // do this only on startup 
+		{
+			firstSample = 1;
 
-		for (int channel = 0; channel < arraySizeInSamps; channel++) {
-			message << readArray[channel] << ", ";
-			pix[channel][pixIndex] = readArray[channel];
+			clearData();
 		}
-		pixIndex = (pixIndex + 1) % BUFFER_SIZE;
+		else {  // do this on every subsequent sample after the initial one
+			int pixIndex = (sampleNum++) % BUFFER_SIZE;
+			message << std::fixed << std::setprecision(2);
+
+			for (int channel = 0; channel < arraySizeInSamps; channel++) {
+				message << readArray[channel];
+				if (channel < arraySizeInSamps - 1)
+					message << ", ";
+				pix[channel][pixIndex] = readArray[channel]*-1;
+			}
+		}
 	}
 	message << endl;
-	OutputDebugStringA(message.str().c_str());
+	//OutputDebugStringA(message.str().c_str());
+	return message.str();
 }
 
 void StopDAQ() {
@@ -314,13 +349,17 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	{
 		// set these colors manually because I can't think of a better way
 		color[0] = CreatePen(PS_SOLID, 1, RGB(255, 0, 0));
-		color[1] = CreatePen(PS_SOLID, 1, RGB(0, 255, 255));
-		color[2] = CreatePen(PS_SOLID, 1, RGB(0, 255, 0));
-		color[3] = CreatePen(PS_SOLID, 1, RGB(0, 0, 255));
-		color[4] = CreatePen(PS_SOLID, 1, RGB(255, 255, 0));
+		color[1] = CreatePen(PS_SOLID, 1, RGB(0, 0, 255));
+		color[2] = CreatePen(PS_SOLID, 1, RGB(255, 255, 0));
+		color[3] = CreatePen(PS_SOLID, 1, RGB(0, 255, 0));
+		color[4] = CreatePen(PS_SOLID, 1, RGB(0, 255, 255));
 		color[5] = CreatePen(PS_SOLID, 1, RGB(255, 0, 255));
-		color[6] = CreatePen(PS_SOLID, 1, RGB(255, 255, 255));
+		color[6] = CreatePen(PS_SOLID, 1, RGB(125, 255, 255));
 		color[7] = CreatePen(PS_SOLID, 1, RGB(0, 0, 0));
+
+		colorGray = CreatePen(PS_SOLID, 1, RGB(180, 180, 180));
+		colorGrayDashed = CreatePen(PS_DASH, 1, RGB(180, 180, 180));
+		colorGrayDot = CreatePen(PS_DOT, 1, RGB(180, 180, 180));
 
 		memset(pix, 0, sizeof(float)*NUM_CHANNELS*BUFFER_SIZE);  // optional, I do it as a precaution.
 
@@ -355,7 +394,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		SelectObject(hdcBack, screenMain);
 
 		// set the text drawing properties into the DC
-		SetTextColor(hdcBack, RGB(255, 255, 255));
 		SetBkMode(hdcBack, TRANSPARENT);
 
 		// finished creating everything, release temporary DC
@@ -367,6 +405,36 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             // Parse the menu selections:
             switch (wmId)
             {
+			case ID_FILE_CLEARSCREEN:
+				clearData();
+				break;
+			case ID_FILE_PAUSE:
+				pauseScreen *= -1;
+				if (pauseScreen == 1) {
+					CheckMenuItem(GetMenu(hWnd), ID_FILE_PAUSE, MF_CHECKED);
+				}
+				else if (pauseScreen == -1) {
+					CheckMenuItem(GetMenu(hWnd), ID_FILE_PAUSE, MF_UNCHECKED);
+				}
+				break;
+			case ID_FILE_SHOWSAMPLEVALUES:
+				showSampleValues *= -1;
+				if (showSampleValues == 1) {
+					CheckMenuItem(GetMenu(hWnd), ID_FILE_SHOWSAMPLEVALUES, MF_CHECKED);
+				}
+				else if (showSampleValues == -1) {
+					CheckMenuItem(GetMenu(hWnd), ID_FILE_SHOWSAMPLEVALUES, MF_UNCHECKED);
+				}
+				break;
+			case ID_FILE_SHOWGRID:
+				hideGrid *= -1;
+				if (hideGrid == 1) {
+					CheckMenuItem(GetMenu(hWnd), ID_FILE_SHOWGRID, MF_CHECKED);
+				}
+				else if (hideGrid == -1) {
+					CheckMenuItem(GetMenu(hWnd), ID_FILE_SHOWGRID, MF_UNCHECKED);
+				}		
+				break;
             case IDM_ABOUT:
                 DialogBox(hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, About);
                 break;
@@ -381,51 +449,100 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	case WM_ERASEBKGND:                // APPENDED FLICKER FREE
 		return TRUE;
 	case WM_TIMER:
-		daqRead();
 
-		{
+		if (pauseScreen == 1) {
+			break;
+		}
+		else {
+			int messageIndex = (daqMessageIndex++) % 10;
+			daqMessage[messageIndex] = daqRead();
+
+			const int edge = 40;
+
 			HDC hdc = GetDC(hWnd);
 
 			HBRUSH backgroundBrush = CreateSolidBrush(RGB(128, 128, 128));
 			RECT rect = { 0,0,widthWindow, heightWindow};
 			FillRect(hdcBack, &rect, backgroundBrush);
-			DeleteObject(backgroundBrush);
 
 			float y = 0;
 			int xP = 0;
 
-			// plots the y minor axis
-			SelectObject(hdcBack, color[0]);
+			SetTextColor(hdcBack, RGB(180, 180, 180));
+			
+			// plots the y axis
 			for (float yAxis = 0; yAxis < 20; yAxis++) {
 				y = yAxis / 20 * heightWindow;
-				MoveToEx(hdcBack, xP, y, NULL);
-				LineTo(hdcBack, xP+10, y);
+				MoveToEx(hdcBack, xP + 40, y, NULL);
+
+				SelectObject(hdcBack, colorGray);
 
 				stringstream buffer;
-				buffer << (yAxis-10);
-				TextOutA(hdcBack, xP + 11, y-8, buffer.str().c_str(), buffer.str().length());
+				int value = ((yAxis - 10)*-1);
+
+				if (value <= 0) {
+					buffer << value << "V";
+				}
+				else {
+					buffer << "+" << value << "V";
+				}
+				TextOutA(hdcBack, xP + 11, y - 8, buffer.str().c_str(), buffer.str().length());
+
+				if (hideGrid == 1) {
+					LineTo(hdcBack, xP + edge + 7, y);
+				}
+				else {
+					if (value % 5 == 0) {
+						SelectObject(hdcBack, colorGrayDashed);
+					}
+					else {
+						SelectObject(hdcBack, colorGrayDot);
+					}
+					LineTo(hdcBack, xP + widthWindow, y);
+				}
+
 			}
 
 			// render data from all analog input channels
 						
 //			for (int channel = 0; channel < NUM_CHANNELS; channel++) {
-			for (int channel = 0; channel < 2; channel++) {
+			for (int channel = 0; channel < 4; channel++) {
 
-				xP = pixIndex;
+				xP = sampleNum%BUFFER_SIZE;
 				y = (pix[channel][xP] + 10) / 20 * heightWindow;
-				MoveToEx(hdcBack, 0, y, NULL);
+				MoveToEx(hdcBack, edge, y, NULL);
 				SelectObject(hdcBack, color[channel]);
 				for (int x = 1; x < BUFFER_SIZE; x++) {
 					xP = (xP + 1) % BUFFER_SIZE;								// increment to next data value INDEX (wrap if necessary)
 					y = (pix[channel][xP] + 10) / 20 * heightWindow;			// get data value based on INDEX and scale into window's space. First scale from -10/10V to 0-1 (normalized)
-					LineTo(hdcBack, (float) x / (float)BUFFER_SIZE*widthWindow, y);
-					MoveToEx(hdcBack, (float)x / (float)BUFFER_SIZE*widthWindow, y, NULL);
+					
+//					int xPosition = (float)x / (float)BUFFER_SIZE*widthWindow;
+					int xPosition = ((float)x / (float)BUFFER_SIZE*(widthWindow-edge));
+
+					LineTo(hdcBack, xPosition + edge, y);
+					MoveToEx(hdcBack, xPosition + edge, y, NULL);
+				}
+			}
+
+			if (showSampleValues == 1) {
+
+				int x = widthWindow / 2 - 150;
+				int y = edge;
+				RECT rect = { x, y, x + 350, y + 200 };
+
+				FillRect(hdcBack, &rect, backgroundBrush);
+				SetTextColor(hdcBack, RGB(180, 180, 180));
+				for (int i = 0; i < 10; i++) {
+					string result = string("[" + to_string(daqMessageIndex) + "] " + daqMessage[i]);
+
+					TextOutA(hdcBack, x, y + 20 * i, result.c_str(), result.length());
 				}
 			}
 
 			// render everything to screen
 			BitBlt(hdc, 0, 0, widthWindow, heightWindow, hdcBack, 0, 0, SRCCOPY);
 
+			DeleteObject(backgroundBrush);
 			ReleaseDC(hWnd, hdc);
 		}
 		break;
@@ -457,6 +574,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		for (int channel = 0; channel < NUM_CHANNELS; channel++) {
 			DeleteObject(color[channel]);
 		}
+		DeleteObject(colorGray);
+		DeleteObject(colorGrayDashed);
+		DeleteObject(colorGrayDot);
 		PostQuitMessage(0);
         break;
     default:
