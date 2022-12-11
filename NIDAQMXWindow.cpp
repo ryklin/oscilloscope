@@ -16,7 +16,9 @@
 #include "NIDAQMXWindow.h"
 #include <iostream>
 #include <sstream>
-#include <iomanip>
+#include <iomanip> //setprecision
+#include <vector>
+#include <algorithm>
 #include "NIDAQmx.h"
 
 using namespace std;
@@ -24,7 +26,8 @@ using namespace std;
 #define NUM_CHANNELS 8 // some cards have 16 channels, and depends also if wired differential or single ended
 
 TaskHandle taskHandle = 0;
-
+int daqDeviceIndexChosen = 0;
+vector<string>daqDevices;
 const int arraySizeInSamps = NUM_CHANNELS;
 float64 readArray[arraySizeInSamps]; 
 
@@ -49,10 +52,11 @@ int pauseScreen = -1;
 int showSampleValues = -1;
 int hideGrid = -1;
 
+void StopDAQ();
+
 void InitDAQ() {
 
-	char deviceNamesStr[255];
-	DAQmxGetSystemInfoAttribute(DAQmx_Sys_DevNames, deviceNamesStr, 255); // this will query the nidaq driver to see what cards are detected
+	StopDAQ();
 
 	int32 status = 0;
 	char errorString[MAX_PATH];
@@ -78,10 +82,11 @@ void InitDAQ() {
 	int32 terminalConfig = DAQmx_Val_RSE;
 
 	int32 units = DAQmx_Val_Volts;
-	char channelStr[] = "/ai0:7";
-//	char nameToAssignToChannel[255] = "Dev1";
-	char nameToAssignToChannel[255] = "Dev2";
-	strcat_s(nameToAssignToChannel, channelStr);
+
+	char channelStr[] = "ai0:7";
+	char nameToAssignToChannel[255] = {""};
+
+	sprintf_s(nameToAssignToChannel, "%s/%s", daqDevices[daqDeviceIndexChosen].c_str(), channelStr);
 
 	status = DAQmxCreateAIVoltageChan(taskHandle, nameToAssignToChannel, "", terminalConfig, -10.0, 10.0, units, NULL);
 	if (status != 0) {
@@ -203,6 +208,8 @@ void StopDAQ() {
 	int32 status;
 	char errorString[MAX_PATH];
 
+	if (taskHandle == NULL)
+		return;
 	status = DAQmxStopTask(taskHandle);
 	if (status != 0) {
 		DAQmxGetErrorString(status, errorString, MAX_PATH);
@@ -224,14 +231,16 @@ void StopDAQ() {
 
 // Global Variables:
 HINSTANCE hInst;                                // current instance
-WCHAR szTitle[MAX_LOADSTRING];                  // The title bar text
-WCHAR szWindowClass[MAX_LOADSTRING];            // the main window class name
+CHAR szTitle[MAX_LOADSTRING];                  // The title bar text
+CHAR szWindowClass[MAX_LOADSTRING];            // the main window class name
 
 // Forward declarations of functions included in this code module:
 ATOM                MyRegisterClass(HINSTANCE hInstance);
 BOOL                InitInstance(HINSTANCE, int);
 LRESULT CALLBACK    WndProc(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK    About(HWND, UINT, WPARAM, LPARAM);
+INT_PTR CALLBACK    ChoseDAQ(HWND, UINT, WPARAM, LPARAM);
+void				EnumerateDAQDevices(HWND hWnd);
 
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                      _In_opt_ HINSTANCE hPrevInstance,
@@ -241,11 +250,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     UNREFERENCED_PARAMETER(hPrevInstance);
     UNREFERENCED_PARAMETER(lpCmdLine);
 
-    // TODO: Place code here.
-
     // Initialize global strings
-    LoadStringW(hInstance, IDS_APP_TITLE, szTitle, MAX_LOADSTRING);
-    LoadStringW(hInstance, IDC_NIDAQMXWINDOW, szWindowClass, MAX_LOADSTRING);
+    //LoadStringW(hInstance, IDS_APP_TITLE, szTitle, MAX_LOADSTRING);
+	strcpy_s(szTitle, "Digital Oscilliscope");
+	strcpy_s(szWindowClass, "NIDAQMXWINDOW");
+    //LoadStringW(hInstance, IDC_NIDAQMXWINDOW, szWindowClass, MAX_LOADSTRING);
     MyRegisterClass(hInstance);
 
     // Perform application initialization:
@@ -281,7 +290,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 //
 ATOM MyRegisterClass(HINSTANCE hInstance)
 {
-    WNDCLASSEXW wcex;
+    WNDCLASSEX wcex;
 
     wcex.cbSize = sizeof(WNDCLASSEX);
 
@@ -293,11 +302,11 @@ ATOM MyRegisterClass(HINSTANCE hInstance)
     wcex.hIcon          = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_NIDAQMXWINDOW));
     wcex.hCursor        = LoadCursor(nullptr, IDC_ARROW);
     wcex.hbrBackground  = (HBRUSH)(COLOR_WINDOW+1);
-    wcex.lpszMenuName   = MAKEINTRESOURCEW(IDC_NIDAQMXWINDOW);
+    wcex.lpszMenuName   = MAKEINTRESOURCE(IDC_NIDAQMXWINDOW);
     wcex.lpszClassName  = szWindowClass;
     wcex.hIconSm        = LoadIcon(wcex.hInstance, MAKEINTRESOURCE(IDI_SMALL));
 
-    return RegisterClassExW(&wcex);
+    return RegisterClassEx(&wcex);
 }
 
 //
@@ -314,7 +323,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 {
    hInst = hInstance; // Store instance handle in our global variable
 
-   HWND hWnd = CreateWindowW(szWindowClass, szTitle, WS_OVERLAPPEDWINDOW,
+   HWND hWnd = CreateWindow(szWindowClass, szTitle, WS_OVERLAPPEDWINDOW,
       0, 0, widthWindow, heightWindow, nullptr, nullptr, hInstance, nullptr);
 
    if (!hWnd)
@@ -363,8 +372,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 		memset(pix, 0, sizeof(float)*NUM_CHANNELS*BUFFER_SIZE);  // optional, I do it as a precaution.
 
-		InitDAQ();
-
+		EnumerateDAQDevices(hWnd);
+		
 		SetTimer(hWnd, WM_TIMER, 0, (TIMERPROC)NULL);
 	}
 		break;
@@ -434,6 +443,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				else if (hideGrid == -1) {
 					CheckMenuItem(GetMenu(hWnd), ID_FILE_SHOWGRID, MF_UNCHECKED);
 				}		
+				break;
+			case IDM_DAQ:
+				DialogBox(hInst, MAKEINTRESOURCE(IDD_CHOOSE_DAQ), hWnd, ChoseDAQ);
 				break;
             case IDM_ABOUT:
                 DialogBox(hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, About);
@@ -603,4 +615,66 @@ INT_PTR CALLBACK About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
         break;
     }
     return (INT_PTR)FALSE;
+}
+
+INT_PTR CALLBACK ChoseDAQ(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	UNREFERENCED_PARAMETER(lParam);
+	
+	switch (message)
+	{
+	case WM_INITDIALOG:
+
+		for (auto deviceName : daqDevices) {
+			char value[255];
+			strcpy_s(value, deviceName.c_str());
+
+			SendMessage(GetDlgItem(hDlg, IDC_COMBO_DAQ_DEVICES), CB_ADDSTRING, 0, (LPARAM)&value);
+		}
+		SendMessage(GetDlgItem(hDlg, IDC_COMBO_DAQ_DEVICES), CB_SETCURSEL, daqDeviceIndexChosen, NULL);
+
+		return (INT_PTR)TRUE;
+
+	case WM_COMMAND:
+		switch (HIWORD(wParam))
+		{
+		case CBN_SELCHANGE:		// drop down control changed
+			daqDeviceIndexChosen = SendMessage(GetDlgItem(hDlg, IDC_COMBO_DAQ_DEVICES), CB_GETCURSEL, 0, 0);
+		default:
+			break;
+		}
+
+		if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL)
+		{
+			InitDAQ();
+			EndDialog(hDlg, LOWORD(wParam));
+			return (INT_PTR)TRUE;
+		}
+		break;
+	}
+	return (INT_PTR)FALSE;
+}
+
+vector<string> splitString(std::string str, char delimiter) {
+	vector<string> v;
+	stringstream src(str);
+	string buf;
+
+	while (getline(src, buf, delimiter)) {
+		v.push_back(buf);
+	}
+	return v;
+}
+
+void EnumerateDAQDevices(HWND hWnd) {
+
+	char deviceNamesStr[255];
+	DAQmxGetSystemInfoAttribute(DAQmx_Sys_DevNames, deviceNamesStr, 255); // this will query the nidaq driver to see what cards are detected
+
+	string deviceNames = deviceNamesStr;
+	deviceNames.erase(std::remove_if(deviceNames.begin(), deviceNames.end(), isspace), deviceNames.end());
+
+	daqDevices = splitString(deviceNames, ',');
+
+	DialogBox(hInst, MAKEINTRESOURCE(IDD_CHOOSE_DAQ), hWnd, ChoseDAQ);
 }
