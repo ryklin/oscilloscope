@@ -26,7 +26,7 @@ using namespace std;
 #define NUM_CHANNELS 8 // some cards have 16 channels, and depends also if wired differential or single ended
 
 TaskHandle taskHandle = 0;
-int daqDeviceIndexChosen = 0;
+int daqDeviceIndexChosen = 1;
 vector<string>daqDevices;
 const int arraySizeInSamps = NUM_CHANNELS;
 float64 readArray[arraySizeInSamps]; 
@@ -549,23 +549,43 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 			// render XY Plot
 			if (show2D == 1) {
+				float hyp = sqrt(widthWindow*widthWindow + heightWindow*heightWindow);
+				int diameter2D = hyp * 1 / 5;
+				float edge2D = diameter2D * 1 / 10;
+				RECT rect = { widthWindow - edge2D - diameter2D, edge2D, widthWindow - edge2D, edge2D + diameter2D };
+				int height2D = rect.bottom - rect.top;
+				int width2D = rect.right - rect.left;
+				xP = 0;
+
 				SelectObject(hdcBack, backgroundBrush);
 				SelectObject(hdcBack, colorGray);
+
+				// render the background
+				Rectangle(hdcBack, rect.left, rect.top, rect.right, rect.bottom);
+
+				// render the x axis
+				MoveToEx(hdcBack, rect.left, rect.top / 2 + rect.bottom / 2, NULL);
+				LineTo(hdcBack, rect.right, rect.top / 2 + rect.bottom / 2);
+				// render the y axis
+				MoveToEx(hdcBack, rect.left + (width2D) / 2, rect.top, NULL);
+				LineTo(hdcBack, rect.left + (width2D) / 2, rect.top + rect.bottom - edge2D);
+
 				for (int channel = 0; channel < 4; channel++) {
-					//RECT rect = { widthWindow-edge, heightWindow+edge, widthWindow-edge-100, heightWindow+edge+100};
-					float hyp = sqrt(widthWindow*widthWindow + heightWindow*heightWindow);
-					int diameter2D = hyp* 1 / 5;
-					float edge2D = diameter2D * 1 / 10;
-					RECT rect = { widthWindow - edge2D - diameter2D, edge2D, widthWindow - edge2D, edge2D + diameter2D };
-					
-					Rectangle(hdcBack, rect.left, rect.top, rect.right, rect.bottom);
 
-					MoveToEx(hdcBack, rect.left, rect.top / 2 + rect.bottom / 2, NULL);
-					LineTo(hdcBack, rect.right, rect.top / 2 + rect.bottom / 2);
+					// render the data
+					xP = sampleNum%BUFFER_SIZE;
+					y = (pix[channel][xP] + 10) / 20 * height2D;
+					MoveToEx(hdcBack, rect.left, y+edge2D, NULL);
+					SelectObject(hdcBack, color[channel]);
+					for (int x = 1; x < BUFFER_SIZE; x++) {
+						xP = (xP + 1) % BUFFER_SIZE;							// increment to next data value INDEX (wrap if necessary)
+						y = (pix[channel][xP] + 10) / 20 * height2D;			// get data value based on INDEX and scale into window's space. First scale from -10/10V to 0-1 (normalized)
 
-					MoveToEx(hdcBack, rect.left + (rect.right-rect.left) / 2, rect.top, NULL);
-					LineTo(hdcBack, rect.left + (rect.right - rect.left) / 2, rect.top+rect.bottom-edge2D);
+						int xPosition = ((float)x / (float)BUFFER_SIZE*(width2D))+rect.left;
 
+						LineTo(hdcBack, xPosition, y+ edge2D);
+						MoveToEx(hdcBack, xPosition, y+ edge2D, NULL);
+					}
 				}
 			}
 
