@@ -41,6 +41,7 @@ HPEN color[NUM_CHANNELS];
 HPEN colorGray;
 HPEN colorGrayDashed;
 HPEN colorGrayDot;
+HBRUSH backgroundBrush;
 
 string daqMessage[10];
 int daqMessageIndex = 0;
@@ -48,6 +49,7 @@ int daqMessageIndex = 0;
 float pix[NUM_CHANNELS][BUFFER_SIZE];
 int sampleNum = 0;
 
+int show2D = 1;
 int pauseScreen = -1;
 int showSampleValues = -1;
 int hideGrid = -1;
@@ -369,6 +371,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		colorGray = CreatePen(PS_SOLID, 1, RGB(180, 180, 180));
 		colorGrayDashed = CreatePen(PS_DASH, 1, RGB(180, 180, 180));
 		colorGrayDot = CreatePen(PS_DOT, 1, RGB(180, 180, 180));
+		backgroundBrush = CreateSolidBrush(RGB(128, 128, 128));
 
 		memset(pix, 0, sizeof(float)*NUM_CHANNELS*BUFFER_SIZE);  // optional, I do it as a precaution.
 
@@ -416,6 +419,15 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             {
 			case ID_FILE_CLEARSCREEN:
 				clearData();
+				break;
+			case ID_FILE_SHOW2D:
+				show2D *= -1;
+				if (show2D) {
+					CheckMenuItem(GetMenu(hWnd), ID_FILE_SHOW2D, MF_CHECKED);
+				}
+				else {
+					CheckMenuItem(GetMenu(hWnd), ID_FILE_PAUSE, MF_UNCHECKED);
+				}
 				break;
 			case ID_FILE_PAUSE:
 				pauseScreen *= -1;
@@ -473,7 +485,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 			HDC hdc = GetDC(hWnd);
 
-			HBRUSH backgroundBrush = CreateSolidBrush(RGB(128, 128, 128));
 			RECT rect = { 0,0,widthWindow, heightWindow};
 			FillRect(hdcBack, &rect, backgroundBrush);
 
@@ -524,15 +535,37 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				y = (pix[channel][xP] + 10) / 20 * heightWindow;
 				MoveToEx(hdcBack, edge, y, NULL);
 				SelectObject(hdcBack, color[channel]);
+
 				for (int x = 1; x < BUFFER_SIZE; x++) {
 					xP = (xP + 1) % BUFFER_SIZE;								// increment to next data value INDEX (wrap if necessary)
 					y = (pix[channel][xP] + 10) / 20 * heightWindow;			// get data value based on INDEX and scale into window's space. First scale from -10/10V to 0-1 (normalized)
 					
-//					int xPosition = (float)x / (float)BUFFER_SIZE*widthWindow;
 					int xPosition = ((float)x / (float)BUFFER_SIZE*(widthWindow-edge));
 
 					LineTo(hdcBack, xPosition + edge, y);
 					MoveToEx(hdcBack, xPosition + edge, y, NULL);
+				}
+			}
+
+			// render XY Plot
+			if (show2D == 1) {
+				SelectObject(hdcBack, backgroundBrush);
+				SelectObject(hdcBack, colorGray);
+				for (int channel = 0; channel < 4; channel++) {
+					//RECT rect = { widthWindow-edge, heightWindow+edge, widthWindow-edge-100, heightWindow+edge+100};
+					float hyp = sqrt(widthWindow*widthWindow + heightWindow*heightWindow);
+					int diameter2D = hyp* 1 / 5;
+					float edge2D = diameter2D * 1 / 10;
+					RECT rect = { widthWindow - edge2D - diameter2D, edge2D, widthWindow - edge2D, edge2D + diameter2D };
+					
+					Rectangle(hdcBack, rect.left, rect.top, rect.right, rect.bottom);
+
+					MoveToEx(hdcBack, rect.left, rect.top / 2 + rect.bottom / 2, NULL);
+					LineTo(hdcBack, rect.right, rect.top / 2 + rect.bottom / 2);
+
+					MoveToEx(hdcBack, rect.left + (rect.right-rect.left) / 2, rect.top, NULL);
+					LineTo(hdcBack, rect.left + (rect.right - rect.left) / 2, rect.top+rect.bottom-edge2D);
+
 				}
 			}
 
@@ -551,10 +584,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				}
 			}
 
+
 			// render everything to screen
 			BitBlt(hdc, 0, 0, widthWindow, heightWindow, hdcBack, 0, 0, SRCCOPY);
 
-			DeleteObject(backgroundBrush);
 			ReleaseDC(hWnd, hdc);
 		}
 		break;
@@ -571,7 +604,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     case WM_DESTROY:
 		StopDAQ();
 		KillTimer(hWnd, 0);
-
+		if (backgroundBrush) {
+			DeleteObject(backgroundBrush); backgroundBrush = NULL;
+		}
 		if (hdcBack) {
 			DeleteDC(hdcBack); hdcBack = NULL;
 		}
