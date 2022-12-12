@@ -29,11 +29,11 @@ TaskHandle taskHandle = 0;
 int daqDeviceIndexChosen = 1;
 vector<string>daqDevices;
 const int arraySizeInSamps = NUM_CHANNELS;
-float64 readArray[arraySizeInSamps]; 
+float64 readArray[NUM_CHANNELS];
 
 #define BUFFER_SIZE 1024  // arbitrary number of bytes that I want to buffer in my computer's RAM
 
-float widthWindow = BUFFER_SIZE;
+float widthWindow = 1024;
 float heightWindow = 768;
 HDC hdcBackGround = NULL;
 HBITMAP screenMain = NULL; 
@@ -152,7 +152,8 @@ void InitDAQ() {
 void clearData() {
 	for (int channel = 0; channel < NUM_CHANNELS; channel++) {
 		for (int x = 0; x < BUFFER_SIZE; x++) {
-			pix[channel][x] = readArray[channel] * -1;
+			pix[channel][x] = readArray[channel];
+//			pix[channel][x] = 0;
 		}
 	}
 }
@@ -172,7 +173,7 @@ string daqRead() {
 	if (status != 0) {
 		char errorString[MAX_PATH];
 		DAQmxGetErrorString(status, errorString, MAX_PATH);
-		message << "DAQmxReadAnalogF64() status:" << status << " " << errorString;
+		message << "(" + to_string(sampleNum) + ")" + " DAQmxReadAnalogF64() status:" << status << " " << errorString;
 	}
 	//if (DAQmxErrorSamplesNotYetAvailable == status || DAQmxErrorSamplesNoLongerAvailable == status) {
 	//	message << "status:" << status << " continue" << std::endl;
@@ -192,12 +193,12 @@ string daqRead() {
 		else {  // do this on every subsequent sample after the initial one
 			int pixIndex = (sampleNum++) % BUFFER_SIZE;
 			message << std::fixed << std::setprecision(2);
-
+			message << "(" << to_string(sampleNum) << ")";
 			for (int channel = 0; channel < arraySizeInSamps; channel++) {
 				message << readArray[channel];
 				if (channel < arraySizeInSamps - 1)
 					message << ", ";
-				pix[channel][pixIndex] = readArray[channel]*-1;
+				pix[channel][pixIndex] = readArray[channel];
 			}
 		}
 	}
@@ -478,6 +479,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			break;
 		}
 		else {
+			int sampleIndex = sampleNum%BUFFER_SIZE;
 			int messageIndex = (daqMessageIndex++) % 10;
 			daqMessage[messageIndex] = daqRead();
 
@@ -487,7 +489,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 			RECT rect = { 0,0,widthWindow, heightWindow};
 			FillRect(hdcBack, &rect, backgroundBrush);
-
+			float x = 0;
 			float y = 0;
 
 			// draw a vertical line demarcating the Y-axis boundary			
@@ -532,37 +534,34 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			for (int channel = 0; channel < 4; channel++) {
 
 				xP = sampleNum%BUFFER_SIZE;
-				y = (pix[channel][xP] + 10) / 20 * heightWindow;
-				MoveToEx(hdcBack, edge, y, NULL);
+				y = (pix[channel][xP] + 10) / 20 * heightWindow * -1;
+				MoveToEx(hdcBack, edge, heightWindow+y, NULL);
 				SelectObject(hdcBack, color[channel]);
 
 				for (int x = 1; x < BUFFER_SIZE; x++) {
 					xP = (xP + 1) % BUFFER_SIZE;								// increment to next data value INDEX (wrap if necessary)
-					y = (pix[channel][xP] + 10) / 20 * heightWindow;			// get data value based on INDEX and scale into window's space. First scale from -10/10V to 0-1 (normalized)
+					y = (pix[channel][xP] + 10) / 20 * heightWindow*-1;			// get data value based on INDEX and scale into window's space. First scale from -10/10V to 0-1 (normalized)
 					
 					int xPosition = ((float)x / (float)BUFFER_SIZE*(widthWindow-edge));
 
-					LineTo(hdcBack, xPosition + edge, y);
-					MoveToEx(hdcBack, xPosition + edge, y, NULL);
+					LineTo(hdcBack, xPosition + edge, heightWindow + y);
+					MoveToEx(hdcBack, xPosition + edge, heightWindow+y, NULL);
 				}
 			}
 
 			// render XY Plot
 			if (show2D == 1) {
 				float hyp = sqrt(widthWindow*widthWindow + heightWindow*heightWindow);
-				int diameter2D = hyp * 1 / 5;
-				float edge2D = diameter2D * 1 / 10;
-				RECT rect = { widthWindow - edge2D - diameter2D, edge2D, widthWindow - edge2D, edge2D + diameter2D };
+				int side2D = hyp * 1 / 5;
+				float edge2D = side2D * 1 / 10;
+				RECT rect = { widthWindow - edge2D - side2D, edge2D, widthWindow - edge2D, edge2D + side2D };
 				int height2D = rect.bottom - rect.top;
 				int width2D = rect.right - rect.left;
-				xP = 0;
-
-				SelectObject(hdcBack, backgroundBrush);
-				SelectObject(hdcBack, colorGray);
 
 				// render the background
+				SelectObject(hdcBack, backgroundBrush);
+				SelectObject(hdcBack, colorGray);
 				Rectangle(hdcBack, rect.left, rect.top, rect.right, rect.bottom);
-
 				// render the x axis
 				MoveToEx(hdcBack, rect.left, rect.top / 2 + rect.bottom / 2, NULL);
 				LineTo(hdcBack, rect.right, rect.top / 2 + rect.bottom / 2);
@@ -570,23 +569,33 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				MoveToEx(hdcBack, rect.left + (width2D) / 2, rect.top, NULL);
 				LineTo(hdcBack, rect.left + (width2D) / 2, rect.top + rect.bottom - edge2D);
 
-				for (int channel = 0; channel < 4; channel++) {
 
-					// render the data
-					xP = sampleNum%BUFFER_SIZE;
-					y = (pix[channel][xP] + 10) / 20 * height2D;
-					MoveToEx(hdcBack, rect.left, y+edge2D, NULL);
-					SelectObject(hdcBack, color[channel]);
-					for (int x = 1; x < BUFFER_SIZE; x++) {
-						xP = (xP + 1) % BUFFER_SIZE;							// increment to next data value INDEX (wrap if necessary)
-						y = (pix[channel][xP] + 10) / 20 * height2D;			// get data value based on INDEX and scale into window's space. First scale from -10/10V to 0-1 (normalized)
+				// render the data
+				char sampleNumStr[255];
+				sprintf_s(sampleNumStr, "[%i] ", sampleNum);
+				for (int channel = 0; channel < 2; channel++) {
 
-						int xPosition = ((float)x / (float)BUFFER_SIZE*(width2D))+rect.left;
+					(hdcBack, GetStockObject(NULL_BRUSH));
+					SelectObject(hdcBack, color[channel * 2]);
 
-						LineTo(hdcBack, xPosition, y+ edge2D);
-						MoveToEx(hdcBack, xPosition, y+ edge2D, NULL);
-					}
+					MoveToEx(hdcBack, x + rect.left+width2D/2, y+height2D/2+edge2D, NULL);
+
+					float x = pix[channel * 2 + 0][sampleIndex-1];
+					float y = pix[channel * 2 + 1][sampleIndex-1];
+
+					sprintf_s(sampleNumStr, "%s(%4.2f, %4.2f)", sampleNumStr, x, y);
+
+					x = (x + 10.0) / 20.0;
+					y = (y + 10.0) / 20.0;
+					
+					x = x * (float)width2D;
+					y = y * (float)height2D;
+	
+
+					int diameter2D = 5;
+					Ellipse(hdcBack, x + rect.left - diameter2D + 1, y + edge2D - diameter2D + 1, x + rect.left + diameter2D + 1, y + edge2D + diameter2D);
 				}
+				if (showSampleValues == 1) TextOut(hdcBack, rect.left + 1, rect.top - 20, sampleNumStr, strlen(sampleNumStr));
 			}
 
 			if (showSampleValues == 1) {
