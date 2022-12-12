@@ -324,7 +324,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
    hInst = hInstance; // Store instance handle in our global variable
 
    HWND hWnd = CreateWindow(szWindowClass, szTitle, WS_OVERLAPPEDWINDOW,
-      0, 0, widthWindow, heightWindow, nullptr, nullptr, hInstance, nullptr);
+	   CW_USEDEFAULT, CW_USEDEFAULT, widthWindow, heightWindow, nullptr, nullptr, hInstance, nullptr);
 
    if (!hWnd)
    {
@@ -478,16 +478,17 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			FillRect(hdcBack, &rect, backgroundBrush);
 
 			float y = 0;
-			int xP = 0;
 
-			SetTextColor(hdcBack, RGB(180, 180, 180));
-			
+			// draw a vertical line demarcating the Y-axis boundary			
+			SelectObject(hdcBack, colorGray);
+			MoveToEx(hdcBack, edge, y, NULL);
+			LineTo(hdcBack, edge, heightWindow);
+
 			// plots the y axis
+			SetTextColor(hdcBack, RGB(180, 180, 180));
 			for (float yAxis = 0; yAxis < 20; yAxis++) {
 				y = yAxis / 20 * heightWindow;
-				MoveToEx(hdcBack, xP + 40, y, NULL);
-
-				SelectObject(hdcBack, colorGray);
+				MoveToEx(hdcBack, edge, y, NULL);
 
 				stringstream buffer;
 				int value = ((yAxis - 10)*-1);
@@ -498,10 +499,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				else {
 					buffer << "+" << value << "V";
 				}
-				TextOutA(hdcBack, xP + 11, y - 8, buffer.str().c_str(), buffer.str().length());
+				TextOutA(hdcBack, 11, y - 8, buffer.str().c_str(), buffer.str().length());
 
 				if (hideGrid == 1) {
-					LineTo(hdcBack, xP + edge + 7, y);
+					LineTo(hdcBack, edge + 7, y);
 				}
 				else {
 					if (value % 5 == 0) {
@@ -510,13 +511,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 					else {
 						SelectObject(hdcBack, colorGrayDot);
 					}
-					LineTo(hdcBack, xP + widthWindow, y);
+					LineTo(hdcBack, widthWindow, y);
 				}
-
 			}
 
 			// render data from all analog input channels
-						
+			int xP = 0;
 //			for (int channel = 0; channel < NUM_CHANNELS; channel++) {
 			for (int channel = 0; channel < 4; channel++) {
 
