@@ -1,16 +1,16 @@
 ### What is this repository for? ###
 
-* Full featured multi-channel analog input from National Instruments (NIDAQmx) devices that visualizes the first two channels as a time series.
-* Demonstrates how to program nidaqmx in the C Programming Language
+* multi-channel (up to 8 time-series) analog input that connects to any NIDAQmx device. Nice scrolling visuals, auto scaling, w/recently added cartesian plot.
+* Demonstrates how to connect and sample from nidaqmx in the C Programming Language
 
 ### How do I get set up? ###
 
 * Install NIDAQmx and plug-in your hardware
 * NIDAQmx any version
-* Plug an analog joystick, function generator, or any device capabale of analog output in to your daq card's first two channels.
+* By default samples the first 4 channels, need to recompile to get all 8.
 * No other configuration necessary.
-* Run binary
+* Run release binary
 
 ### Who do I talk to? ###
 
-* info@ryklinsoftware.com
+* edward@neurosoftware.com
