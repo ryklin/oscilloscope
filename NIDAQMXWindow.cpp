@@ -1,6 +1,6 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 //
-// Copyright (C) 2022  Neuro Software Developers, Inc.
+// Copyright (C) 2023  Neuro Software Developers, Inc.
 //
 // Contact Information:
 //
@@ -26,7 +26,7 @@ using namespace std;
 #define NUM_CHANNELS 8 // some cards have 16 channels, and depends also if wired differential or single ended
 
 TaskHandle taskHandle = 0;
-int daqDeviceIndexChosen = 1;
+int daqDeviceIndexChosen = 2;
 vector<string>daqDevices;
 const int arraySizeInSamps = NUM_CHANNELS;
 float64 readArray[NUM_CHANNELS];
@@ -307,7 +307,7 @@ ATOM MyRegisterClass(HINSTANCE hInstance)
     wcex.hbrBackground  = (HBRUSH)(COLOR_WINDOW+1);
     wcex.lpszMenuName   = MAKEINTRESOURCE(IDC_NIDAQMXWINDOW);
     wcex.lpszClassName  = szWindowClass;
-    wcex.hIconSm        = LoadIcon(wcex.hInstance, MAKEINTRESOURCE(IDI_SMALL));
+    wcex.hIconSm        = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_NIDAQMXWINDOW));
 
     return RegisterClassEx(&wcex);
 }
