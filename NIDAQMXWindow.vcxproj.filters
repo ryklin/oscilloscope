@@ -42,10 +42,10 @@
     </ResourceCompile>
   </ItemGroup>
   <ItemGroup>
-    <Image Include="small.ico">
+    <Image Include="NIDAQMXWindow.ico">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="NIDAQMXWindow.ico">
+    <Image Include="small.ico">
       <Filter>Resource Files</Filter>
     </Image>
   </ItemGroup>
