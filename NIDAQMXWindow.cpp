@@ -577,7 +577,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 					(hdcBack, GetStockObject(NULL_BRUSH));
 					SelectObject(hdcBack, color[channel * 2]);
-
 					MoveToEx(hdcBack, x + rect.left+width2D/2, y+height2D/2+edge2D, NULL);
 
 					float x = pix[channel * 2 + 0][sampleIndex-1];
