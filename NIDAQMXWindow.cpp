@@ -427,11 +427,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				break;
 			case ID_FILE_SHOW2D:
 				show2D *= -1;
-				if (show2D) {
+				if (show2D == -1) {
 					CheckMenuItem(GetMenu(hWnd), ID_FILE_SHOW2D, MF_CHECKED);
 				}
 				else {
-					CheckMenuItem(GetMenu(hWnd), ID_FILE_PAUSE, MF_UNCHECKED);
+					CheckMenuItem(GetMenu(hWnd), ID_FILE_SHOW2D, MF_UNCHECKED);
 				}
 				break;
 			case ID_FILE_PAUSE:
@@ -544,7 +544,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 				for (int x = 1; x < BUFFER_SIZE; x++) {
 					xP = (xP + 1) % BUFFER_SIZE;								// increment to next data value INDEX (wrap if necessary)
-					y = (pix[channel][xP] + 10) / 20 * heightWindow*-1;			// get data value based on INDEX and scale into window's space. First scale from -10/10V to 0-1 (normalized)
+					y = (pix[channel][xP] + 10.0) / 20.0 * heightWindow*-1;			// get data value based on INDEX and scale into window's space. First scale from -10/10V to 0-1 (normalized)
 					
 					int xPosition = ((float)x / (float)BUFFER_SIZE*(widthWindow-edge));
 
@@ -573,32 +573,60 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				MoveToEx(hdcBack, rect.left + (width2D) / 2, rect.top, NULL);
 				LineTo(hdcBack, rect.left + (width2D) / 2, rect.top + rect.bottom - edge2D);
 
-
 				// render the data
-				char sampleNumStr[255];
+				char sampleNumStr[255] = { "" };
 				sprintf_s(sampleNumStr, "[%i] ", sampleNum);
+
+				SelectObject(hdcBack, GetStockObject(NULL_BRUSH));
+
+				int diameter2D = 1;
 
 				for (int channel = 0; channel < numChannelsToPlot; channel++) {
 
-					(hdcBack, GetStockObject(NULL_BRUSH));
-					SelectObject(hdcBack, color[channel * 2]);
 					MoveToEx(hdcBack, x + rect.left+width2D/2, y+height2D/2+edge2D, NULL);
+
+
+					// show trail
+					xP = 0;
+					SelectObject(hdcBack, color[channel * 1]);
+
+					for (int i = 1; i < BUFFER_SIZE; i++) {
+						xP = (xP + 1) % BUFFER_SIZE;								
+
+						x = pix[channel * 2 + 0][xP];
+						y = pix[channel * 2 + 1][xP];
+
+						x = (x + 10.0) / 20.0;
+						y = (y + 10.0) / 20.0;
+
+						x = x * (float)width2D;
+						y = y * (float)height2D;
+
+						Ellipse(hdcBack, x + rect.left - diameter2D + 1, y + edge2D - diameter2D + 1, x + rect.left + diameter2D + 1, y + edge2D + diameter2D);
+					}
+					// show trail end
+
+
+					// show current location
+					SelectObject(hdcBack, color[channel * 2]);
 
 					float x = pix[channel * 2 + 0][sampleIndex-1];
 					float y = pix[channel * 2 + 1][sampleIndex-1];
 
-					sprintf_s(sampleNumStr, "%s(%4.2f, %4.2f)", sampleNumStr, x, y);
+					if (showSampleValues == 1) sprintf_s(sampleNumStr, "%s(%4.2f, %4.2f)", sampleNumStr, x, y);
 
 					x = (x + 10.0) / 20.0;
 					y = (y + 10.0) / 20.0;
 					
 					x = x * (float)width2D;
 					y = y * (float)height2D;
-	
 
-					int diameter2D = 5;
+					diameter2D = 7;
+
 					Ellipse(hdcBack, x + rect.left - diameter2D + 1, y + edge2D - diameter2D + 1, x + rect.left + diameter2D + 1, y + edge2D + diameter2D);
+					// show current location end
 				}
+
 				if (showSampleValues == 1) TextOut(hdcBack, rect.left + 1, rect.top - 20, sampleNumStr, strlen(sampleNumStr));
 			}
 
@@ -739,7 +767,7 @@ vector<string> splitString(std::string str, char delimiter) {
 
 void EnumerateDAQDevices(HWND hWnd) {
 
-	char deviceNamesStr[255];
+	char deviceNamesStr[255] = {"\0"};
 	DAQmxGetSystemInfoAttribute(DAQmx_Sys_DevNames, deviceNamesStr, 255); // this will query the nidaq driver to see what cards are detected
 
 	string deviceNames = deviceNamesStr;
