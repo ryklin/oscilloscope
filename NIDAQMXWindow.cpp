@@ -25,6 +25,7 @@ using namespace std;
 
 #define NUM_CHANNELS 8 // some cards have 16 channels, and depends also if wired differential or single ended
 
+int numChannelsToPlot = 1;
 TaskHandle taskHandle = 0;
 int daqDeviceIndexChosen = 2;
 vector<string>daqDevices;
@@ -42,6 +43,7 @@ HPEN colorGray;
 HPEN colorGrayDashed;
 HPEN colorGrayDot;
 HBRUSH backgroundBrush;
+HBRUSH backgroundBrush2;
 
 string daqMessage[10];
 int daqMessageIndex = 0;
@@ -255,7 +257,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 
     // Initialize global strings
     //LoadStringW(hInstance, IDS_APP_TITLE, szTitle, MAX_LOADSTRING);
-	strcpy_s(szTitle, "Digital Oscilliscope");
+	strcpy_s(szTitle, "Digital Oscilloscope for Space / Time Testing");
 	strcpy_s(szWindowClass, "NIDAQMXWINDOW");
     //LoadStringW(hInstance, IDC_NIDAQMXWINDOW, szWindowClass, MAX_LOADSTRING);
     MyRegisterClass(hInstance);
@@ -360,10 +362,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	case WM_CREATE:
 	{
 		// set these colors manually because I can't think of a better way
-		color[0] = CreatePen(PS_SOLID, 1, RGB(255, 0, 0));
-		color[1] = CreatePen(PS_SOLID, 1, RGB(0, 0, 255));
+//		color[0] = CreatePen(PS_SOLID, 1, RGB(255, 0, 0));
+		color[0] = CreatePen(PS_SOLID, 1, RGB(0, 255, 0));
+		color[1] = CreatePen(PS_SOLID, 1, RGB(255, 255, 255));
 		color[2] = CreatePen(PS_SOLID, 1, RGB(255, 255, 0));
-		color[3] = CreatePen(PS_SOLID, 1, RGB(0, 255, 0));
+		color[3] = CreatePen(PS_SOLID, 1, RGB(0, 0, 255));
 		color[4] = CreatePen(PS_SOLID, 1, RGB(0, 255, 255));
 		color[5] = CreatePen(PS_SOLID, 1, RGB(255, 0, 255));
 		color[6] = CreatePen(PS_SOLID, 1, RGB(125, 255, 255));
@@ -372,7 +375,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		colorGray = CreatePen(PS_SOLID, 1, RGB(180, 180, 180));
 		colorGrayDashed = CreatePen(PS_DASH, 1, RGB(180, 180, 180));
 		colorGrayDot = CreatePen(PS_DOT, 1, RGB(180, 180, 180));
-		backgroundBrush = CreateSolidBrush(RGB(128, 128, 128));
+		backgroundBrush = CreateSolidBrush(RGB(88, 88, 88));
+		backgroundBrush2 = CreateSolidBrush(RGB(58, 58, 58));
 
 		memset(pix, 0, sizeof(float)*NUM_CHANNELS*BUFFER_SIZE);  // optional, I do it as a precaution.
 
@@ -531,7 +535,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			// render data from all analog input channels
 			int xP = 0;
 //			for (int channel = 0; channel < NUM_CHANNELS; channel++) {
-			for (int channel = 0; channel < 4; channel++) {
+			for (int channel = 0; channel < numChannelsToPlot*2; channel++) {
 
 				xP = sampleNum%BUFFER_SIZE;
 				y = (pix[channel][xP] + 10) / 20 * heightWindow * -1;
@@ -552,14 +556,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			// render XY Plot
 			if (show2D == 1) {
 				float hyp = sqrt(widthWindow*widthWindow + heightWindow*heightWindow);
-				int side2D = hyp * 1 / 5;
-				float edge2D = side2D * 1 / 10;
+				float side2D = hyp * 1.0 / 8.0;
+				float edge2D = side2D * 1.0 / 10.0;
 				RECT rect = { widthWindow - edge2D - side2D, edge2D, widthWindow - edge2D, edge2D + side2D };
 				int height2D = rect.bottom - rect.top;
 				int width2D = rect.right - rect.left;
 
 				// render the background
-				SelectObject(hdcBack, backgroundBrush);
+				SelectObject(hdcBack, backgroundBrush2);
 				SelectObject(hdcBack, colorGray);
 				Rectangle(hdcBack, rect.left, rect.top, rect.right, rect.bottom);
 				// render the x axis
@@ -573,7 +577,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				// render the data
 				char sampleNumStr[255];
 				sprintf_s(sampleNumStr, "[%i] ", sampleNum);
-				for (int channel = 0; channel < 2; channel++) {
+
+				for (int channel = 0; channel < numChannelsToPlot; channel++) {
 
 					(hdcBack, GetStockObject(NULL_BRUSH));
 					SelectObject(hdcBack, color[channel * 2]);
@@ -634,6 +639,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		KillTimer(hWnd, 0);
 		if (backgroundBrush) {
 			DeleteObject(backgroundBrush); backgroundBrush = NULL;
+		}
+		if (backgroundBrush2) {
+			DeleteObject(backgroundBrush2); backgroundBrush2 = NULL;
 		}
 		if (hdcBack) {
 			DeleteDC(hdcBack); hdcBack = NULL;
