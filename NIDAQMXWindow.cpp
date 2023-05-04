@@ -365,15 +365,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	case WM_CREATE:
 	{
 		// set these colors manually because I can't think of a better way
-//		color[0] = CreatePen(PS_SOLID, 1, RGB(255, 0, 0));
 		color[0] = CreatePen(PS_SOLID, 1, RGB(0, 255, 0));
-		color[1] = CreatePen(PS_SOLID, 1, RGB(255, 255, 255));
+		color[1] = CreatePen(PS_SOLID, 1, RGB(0, 205, 0));
 		color[2] = CreatePen(PS_SOLID, 1, RGB(255, 255, 0));
-		color[3] = CreatePen(PS_SOLID, 1, RGB(0, 0, 255));
+		color[3] = CreatePen(PS_SOLID, 1, RGB(205, 205, 0));
 		color[4] = CreatePen(PS_SOLID, 1, RGB(0, 255, 255));
-		color[5] = CreatePen(PS_SOLID, 1, RGB(255, 0, 255));
-		color[6] = CreatePen(PS_SOLID, 1, RGB(125, 255, 255));
-		color[7] = CreatePen(PS_SOLID, 1, RGB(0, 0, 0));
+		color[5] = CreatePen(PS_SOLID, 1, RGB(0, 205, 205));
+		color[6] = CreatePen(PS_SOLID, 1, RGB(255, 0, 0));
+		color[7] = CreatePen(PS_SOLID, 1, RGB(205, 0, 0));
 
 		colorGray = CreatePen(PS_SOLID, 1, RGB(180, 180, 180));
 		colorGrayDashed = CreatePen(PS_DASH, 1, RGB(180, 180, 180));
@@ -535,10 +534,17 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				}
 			}
 
+			/*
+			1 = 0,1
+			2 = 2,3
+			3 = 4,5
+			4 = 6,7
+			*/
 			// render data from all analog input channels
 			int xP = 0;
 //			for (int channel = 0; channel < NUM_CHANNELS; channel++) {
-			for (int channel = 0; channel < numChannelsToPlot*2; channel++) {
+//			for (int channel = 0; channel < numChannelsToPlot*2; channel++) {
+			for (int channel = numChannelsToPlot * 2 - 2; channel < numChannelsToPlot * 2; channel++) {
 
 				xP = sampleNum%BUFFER_SIZE;
 				y = (pix[channel][xP] + 10) / 20 * heightWindow * -1;
@@ -584,7 +590,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 				int diameter2D = 1;
 
-				for (int channel = 0; channel < numChannelsToPlot; channel++) {
+				//for (int channel = 0; channel < numChannelsToPlot; channel++) {
+				for (int channel = numChannelsToPlot-1; channel < numChannelsToPlot; channel++) {
 
 					MoveToEx(hdcBack, x + rect.left+width2D/2, y+height2D/2+edge2D, NULL);
 
