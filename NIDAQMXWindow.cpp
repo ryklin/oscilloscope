@@ -28,6 +28,7 @@ using namespace std;
 int numChannelsToPlot = 1;
 TaskHandle taskHandle = 0;
 int daqDeviceIndexChosen = 2;
+int32 terminalConfig = DAQmx_Val_Cfg_Default;
 vector<string>daqDevices;
 const int arraySizeInSamps = NUM_CHANNELS;
 float64 readArray[NUM_CHANNELS];
@@ -83,7 +84,9 @@ void InitDAQ() {
 	DAQmx_Val_Diff
 	DAQmx_Val_PseudoDiff
 	*/
-	int32 terminalConfig = DAQmx_Val_RSE;
+
+	//int32 terminalConfig = DAQmx_Val_RSE;
+	//int32 terminalConfig = DAQmx_Val_Diff;
 
 	int32 units = DAQmx_Val_Volts;
 
@@ -719,18 +722,26 @@ INT_PTR CALLBACK About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 INT_PTR CALLBACK ChoseDAQ(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	UNREFERENCED_PARAMETER(lParam);
-	
+	static int terminalIndex = 0;
+	char terminalModes[5][255] = { "Default", "RSE", "NRSE", "Differential", "PseudoDiff" };
+
 	switch (message)
 	{
 	case WM_INITDIALOG:
+		for (int i = 1; i <= 4; i++) {
+			SendMessage(GetDlgItem(hDlg, IDC_COMBO_DAQ_CHANNELS), CB_ADDSTRING, 0, (LPARAM)to_string(i).c_str());
+		}
+		SendMessage(GetDlgItem(hDlg, IDC_COMBO_DAQ_CHANNELS), CB_SETCURSEL, numChannelsToPlot-1, NULL);
 
 		for (auto deviceName : daqDevices) {
-			char value[255];
-			strcpy_s(value, deviceName.c_str());
-
-			SendMessage(GetDlgItem(hDlg, IDC_COMBO_DAQ_DEVICES), CB_ADDSTRING, 0, (LPARAM)&value);
+			SendMessage(GetDlgItem(hDlg, IDC_COMBO_DAQ_DEVICES), CB_ADDSTRING, 0, (LPARAM)deviceName.c_str());
 		}
 		SendMessage(GetDlgItem(hDlg, IDC_COMBO_DAQ_DEVICES), CB_SETCURSEL, daqDeviceIndexChosen, NULL);
+
+		for (int i = 0; i < 5; i++) {
+			SendMessage(GetDlgItem(hDlg, IDC_COMBO_DAQ_MODE), CB_ADDSTRING, 0, (LPARAM)&terminalModes[i]);
+		}
+		SendMessage(GetDlgItem(hDlg, IDC_COMBO_DAQ_MODE), CB_SETCURSEL, terminalIndex, NULL);
 
 		return (INT_PTR)TRUE;
 
@@ -739,6 +750,18 @@ INT_PTR CALLBACK ChoseDAQ(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 		{
 		case CBN_SELCHANGE:		// drop down control changed
 			daqDeviceIndexChosen = SendMessage(GetDlgItem(hDlg, IDC_COMBO_DAQ_DEVICES), CB_GETCURSEL, 0, 0);
+			numChannelsToPlot = SendMessage(GetDlgItem(hDlg, IDC_COMBO_DAQ_CHANNELS), CB_GETCURSEL, 0, 0) + 1;
+			terminalIndex = SendMessage(GetDlgItem(hDlg, IDC_COMBO_DAQ_MODE), CB_GETCURSEL, 0, 0);
+
+			switch (terminalIndex) {
+			case 0:terminalConfig = DAQmx_Val_Cfg_Default; break;
+			case 1:terminalConfig = DAQmx_Val_RSE; break;
+			case 2:terminalConfig = DAQmx_Val_NRSE; break;
+			case 3:terminalConfig = DAQmx_Val_Diff; break;
+			case 4:terminalConfig = DAQmx_Val_PseudoDiff; break;
+			default:terminalConfig = DAQmx_Val_Cfg_Default; break;
+
+			}
 		default:
 			break;
 		}
